@@ -5,24 +5,26 @@ using UnityEngine;
 
 public class SoundWaveReveal : MonoBehaviour
 {
-    public Material revealMaterial;  // Assign RevealMaterial in Inspector
-    public float revealRadius = 3f;  // How big the reveal is
-    public float fadeTime = 2f;      // How fast the effect fades
-   
-    public Vector2 playerPosition;
+    public Material revealMaterial; // Assign the material in the Inspector
+    public Transform player; // Assign the player GameObject in the Inspector
+    public float revealRadius = 0f; // Maximum reveal radius
+    public float revealTime = 0f; // Time for the wave to expand & fade
 
-    void Start()
+    private void Start()
     {
-        revealMaterial.SetFloat("_RevealRadius", 0f); // Start invisible
-        playerPosition = transform.position; // Set player position
+        if (revealMaterial == null)
+        {
+            Debug.LogError("Reveal Material is not assigned!");
+            return;
+        }
+
+        revealMaterial.SetFloat("_RevealRadius", 0f); // Start fully hidden
     }
 
-    void Update()
+    private void Update()
     {
-        // Detect mouse click and trigger sound wave
-        if (Input.GetMouseButtonDown(0))  // 0 is for left mouse button
+        if (Input.GetMouseButtonDown(0))  // Left mouse button triggers a sound wave
         {
-            // Get mouse position in screen space
             Vector2 mousePosition = Input.mousePosition;
             TriggerSoundWave(mousePosition);
         }
@@ -30,40 +32,46 @@ public class SoundWaveReveal : MonoBehaviour
 
     public void TriggerSoundWave(Vector2 mousePosition)
     {
-        StopAllCoroutines(); // Reset any previous fades
-        StartCoroutine(ExpandWave(mousePosition));
+        StopAllCoroutines(); // Stop any ongoing wave expansion
+        StartCoroutine(ExpandAndFadeWave(mousePosition));
     }
 
-    IEnumerator ExpandWave(Vector2 mousePosition)
+    private IEnumerator ExpandAndFadeWave(Vector2 mousePosition)
     {
-        // Convert mouse position from screen space to world space
+        // Convert mouse position from screen to world coordinates
         Vector2 mouseWorldPos = Camera.main.ScreenToWorldPoint(mousePosition);
 
-        // Calculate the direction from player to mouse
+        // Get the player's current position (fixing the static issue)
+        Vector2 playerPosition = player.position;
+
+        // Calculate direction from the player to the mouse
         Vector2 direction = (mouseWorldPos - playerPosition).normalized;
 
-        // The maximum distance for the wave (this will be the reveal radius)
-        float maxRadius = revealRadius;
-
-        // Set the center of the reveal to be the player position
+        // Set shader properties
         revealMaterial.SetVector("_RevealCenter", new Vector4(playerPosition.x, playerPosition.y, 0, 0));
-
-        // Pass the direction to the shader if it handles directional waves
         revealMaterial.SetVector("_RevealDirection", new Vector4(direction.x, direction.y, 0, 0));
+        revealMaterial.SetFloat("_RevealRadius", 0); // Start fully hidden
 
-        // Expand the wave over time
-        for (float t = 0; t < fadeTime; t += Time.deltaTime)
+        // Expand the wave
+        for (float t = 0; t < revealTime; t += Time.deltaTime)
         {
-            // Calculate the current radius based on time
-            float radius = Mathf.Lerp(0, maxRadius, t / fadeTime);
-
-            // Update the reveal radius in the material
+            float radius = Mathf.Lerp(0, revealRadius, t / revealTime);
             revealMaterial.SetFloat("_RevealRadius", radius);
-
-            yield return null; // Wait for the next frame
+            yield return null;
         }
 
-        // Ensure the final radius is set to maxRadius
-        revealMaterial.SetFloat("_RevealRadius", maxRadius);
+        revealMaterial.SetFloat("_RevealRadius", revealRadius); // Ensure max radius is applied
+
+        // Wait briefly, then fade the wave back to invisible
+        yield return new WaitForSeconds(4f);
+        float fadeTime = revealTime * 3f;
+        for (float t = 0; t < fadeTime; t += Time.deltaTime)
+        {
+            float radius = Mathf.Lerp(revealRadius, 0, t / fadeTime);
+            revealMaterial.SetFloat("_RevealRadius", radius);
+            yield return null;
+        }
+
+        revealMaterial.SetFloat("_RevealRadius", 0f); // Fully hidden again
     }
 }
